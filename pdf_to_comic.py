@@ -177,14 +177,41 @@ def pdf_to_comic(pdf_path):
 
     return make_comic(panels, images)
 
+def analyze_threats(pdf):
+    reader = PdfReader(pdf)
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    prompt = """Given a research paper, identify and list the threats of validity pertaining to three different categories:
+    1. External valdity threats
+    2. Internal validity threats
+    3. Construct validity threats
+    Return a JSON array of strings. For each idea, make sure to state the specific category it belongs to. Paper text:""" + text
+
+    resp = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=[types.Part.from_text(text=prompt)],
+        config=types.GenerateContentConfig(temperature=0.3)
+    )
+    #print(f"RESP: {resp}")
+    analysis = "".join(part.text for part in resp.candidates[0].content.parts if part.text)
+    return analysis.strip()
+
+# analysis = "".join(part.text for part in resp.candidates[0].content.parts if part.text)
+#     return analysis.strip()
+
 # Gradio UI
 with gr.Blocks() as demo:
     gr.Markdown("PDF to Comic")
     with gr.Row():
         pdf_in = gr.File(label="Upload PDF", file_count="single", type="filepath")
+
     comic_out = gr.Image(label="Comic Strip")
+    threats_out = gr.Markdown(label="Threats to Validity")
+
     convert_btn = gr.Button("Convert to Comic")
+    analyze_btn = gr.Button("Predict Threats to Validity")
+
     convert_btn.click(fn=pdf_to_comic, inputs=[pdf_in], outputs=[comic_out])
+    analyze_btn.click(fn=analyze_threats, inputs=[pdf_in], outputs=[threats_out])
 
 if __name__ == "__main__":
     demo.launch()
