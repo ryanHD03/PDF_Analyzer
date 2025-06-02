@@ -13,10 +13,7 @@ import textwrap
 from dotenv import load_dotenv
 load_dotenv() 
 
-#client = genai.Client(api_key=os.getenv("GOOGLE_GENAI_API_KEY"))
-key = os.getenv("GOOGLE_GENAI_API_KEY")
-print("DEBUG ▶ GOOGLE_GENAI_API_KEY =", repr(key))
-
+client = genai.Client(api_key=os.getenv("GOOGLE_GENAI_API_KEY"))
 # extract text from PDF
 def extract_pdf_text(path):
     reader = PdfReader(path)
@@ -44,7 +41,6 @@ def make_beats(text):
 # parse json
 def extract_json(raw_text):
     clean = re.sub(r'```(?:json)?', '', raw_text).strip()
-
     decoder = json.JSONDecoder()
     pos = 0
     results = []
@@ -103,7 +99,7 @@ def make_image(scene, beat):
 # combine all images and dialogues into one comic strip
 def make_comic(panels, images, scale=3):
     widths, heights = zip(*(img.size for img in images))
-    total_w, max_h = sum(widths), max(heights)+150
+    total_w, max_h = sum(widths), max(heights)+300
     canvas = Image.new("RGB", (total_w * scale, max_h * scale), "white")
     draw = ImageDraw.Draw(canvas)
     x_off = []
@@ -120,10 +116,21 @@ def make_comic(panels, images, scale=3):
     for i, panel in enumerate(panels):
         raw = panel.get("dialogue", [])
         if isinstance(raw, str):
-            dlg = [{"character": "", "text": raw}]
-        elif isinstance(dlg, list):
+            dlg = [{"character": "", "line": raw}]
+        elif isinstance(raw, dict):
+            dlg = []
+            for name, text in raw.items():
+                dlg.append({"character": name, "line": text.strip()})
+        elif isinstance(raw, list):
             dlg = raw
-        lines = [f"{d.get('character','')}: {d['text']}".strip(": ") for d in dlg]
+        else:
+            dlg = []
+            
+        try:
+            lines = [f"{d.get('character','')}: {d['line']}".strip(": ") for d in dlg]
+        except:
+            lines = [f"{d.get('character','')}: {d['text']}".strip(": ") for d in dlg]
+        
         text_block = "\n".join(lines)
 
         panel_w = images[i].width*scale
@@ -144,7 +151,7 @@ def make_comic(panels, images, scale=3):
 
     return canvas.resize((total_w, max_h), Image.LANCZOS)
 
-unwanted_text = {'```json', '', '[', ']', '{', '}', '```'} # strip these tokens from the beats
+unwanted_text = {'json', '```json', '', '[', ']', '{', '}', '```'} # strip these tokens from the beats
 
 # convert a PDF into a comic strip
 @retry(wait=wait_random_exponential(multiplier=1, max=60))
